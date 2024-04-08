@@ -1,5 +1,7 @@
 import { DLLMId, getKnowledgeMapCutoff } from '~/modules/llms/store-llms';
 
+import { browserLangOrUS } from '~/common/util/pwaUtils';
+
 /*type Variables =
   | '{{Today}}'
   | '{{Cutoff}}'
@@ -48,10 +50,9 @@ export function bareBonesPromptMixer(_template: string, assistantLlmId: DLLMId |
 
   // {{LocaleNow}} - enough information to get on the same page with the user
   if (mixed.includes('{{LocaleNow}}')) {
-    const userLocale = navigator.language || 'en-US';
     // const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     // Format the current date and time according to the user's locale and timezone
-    const formatter = new Intl.DateTimeFormat(userLocale, {
+    const formatter = new Intl.DateTimeFormat(browserLangOrUS, {
       weekday: 'short', // Full name of the day of the week
       year: 'numeric', // Numeric year
       month: 'short', // Full name of the month
@@ -71,7 +72,7 @@ export function bareBonesPromptMixer(_template: string, assistantLlmId: DLLMId |
   // {{Render...}}
   mixed = mixed.replace('{{RenderMermaid}}', 'Mermaid rendering: Enabled');
   mixed = mixed.replace('{{RenderPlantUML}}', 'PlantUML rendering: Enabled');
-  mixed = mixed.replace('{{RenderSVG}}', 'SVG rendering: Enabled');
+  mixed = mixed.replace('{{RenderSVG}}', 'SVG in markdown rendering: Enabled');
   // {{Input...}} / {{Tool...}} - TBA
   mixed = mixed.replace('{{InputImage0}}', 'Image input capabilities: Disabled');
   mixed = mixed.replace('{{ToolBrowser0}}', 'Web browsing capabilities: Disabled');
