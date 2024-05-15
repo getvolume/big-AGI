@@ -47,10 +47,10 @@ the same steps 1 and 2 as for [local development](#local-development).
    # .. repeat the steps above up to `npm install`, then:
    npm run build
    ```
-4. Start the production server:
+4. Start the production server (`npx` may be optional):
    ```bash
-    next start --port 3000
-    ```
+   npx next start --port 3000
+   ```
    Your big-AGI production instance is on `http://localhost:3000`.
 
 ### Advanced Customization
@@ -90,10 +90,10 @@ or follow the steps below for a quick start.
    ```bash
    # 2A. if you built the image yourself:
    docker run -d -p 3000:3000 big-agi
-   
+
    # 2B. or use the pre-built image:
    docker run -d -p 3000:3000 ghcr.io/enricoros/big-agi
-   
+
    # 2C. or use docker-compose:
    docker-compose up
    ```
