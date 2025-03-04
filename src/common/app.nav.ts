@@ -1,17 +1,12 @@
 import type { FunctionComponent } from 'react';
 
 // App icons
-import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
-import AccountTreeTwoToneIcon from '@mui/icons-material/AccountTreeTwoTone';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import CallIcon from '@mui/icons-material/Call';
 import CallOutlinedIcon from '@mui/icons-material/CallOutlined';
+import DifferenceOutlinedIcon from '@mui/icons-material/DifferenceOutlined';
 import Diversity2Icon from '@mui/icons-material/Diversity2';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
-import FormatPaintOutlinedIcon from '@mui/icons-material/FormatPaintOutlined';
-import FormatPaintTwoToneIcon from '@mui/icons-material/FormatPaintTwoTone';
 import GrainIcon from '@mui/icons-material/Grain';
 import ImageIcon from '@mui/icons-material/Image';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
@@ -19,8 +14,6 @@ import IosShareIcon from '@mui/icons-material/IosShare';
 import IosShareOutlinedIcon from '@mui/icons-material/IosShareOutlined';
 import TextsmsIcon from '@mui/icons-material/Textsms';
 import TextsmsOutlinedIcon from '@mui/icons-material/TextsmsOutlined';
-import WorkspacesIcon from '@mui/icons-material/Workspaces';
-import WorkspacesOutlinedIcon from '@mui/icons-material/WorkspacesOutlined';
 // Link icons
 import GitHubIcon from '@mui/icons-material/GitHub';
 import { DiscordIcon } from '~/common/components/icons/3rdparty/DiscordIcon';
@@ -31,7 +24,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 
 import { Brand } from '~/common/app.config';
 import { ChatBeamIcon } from '~/common/components/icons/ChatBeamIcon';
-import { hasNoChatLinkItems } from '~/modules/trade/link/store-link';
+import { hasNoChatLinkItems } from '~/modules/trade/link/store-share-link';
 
 
 // enable to show all items, for layout development
@@ -59,6 +52,7 @@ export interface NavItemApp extends ItemBase {
     | (() => boolean),    // set to true to hide the icon, unless this is the active app
   hideBar?: boolean,      // set to true to hide the page bar
   hideDrawer?: boolean,   // set to true to hide the drawer
+  panelAsMenu?: boolean,  // set to true to use the popup menu as the panel
   hideNav?: boolean
     | (() => boolean),    // set to hide the Nav bar (note: must have a way to navigate back)
   fullWidth?: boolean,    // set to true to override the user preference
@@ -105,49 +99,49 @@ export const navItems: {
       type: 'app',
       route: '/call',
       hideDrawer: true,
+      panelAsMenu: true,
       fullWidth: true,
     },
-    {
-      name: 'Draw',
-      barTitle: 'Generate Images',
-      icon: FormatPaintOutlinedIcon,
-      iconActive: FormatPaintTwoToneIcon,
-      type: 'app',
-      route: '/draw',
-      // hideOnMobile: true,
-      hideDrawer: true,
-      isDev: true,
-      _delete: true,
-    },
-    {
-      name: 'Cortex',
-      icon: AutoAwesomeOutlinedIcon,
-      iconActive: AutoAwesomeIcon,
-      type: 'app',
-      route: '/cortex',
-      isDev: true,
-      _delete: true,
-    },
-    {
-      name: 'Patterns',
-      icon: AccountTreeOutlinedIcon,
-      iconActive: AccountTreeTwoToneIcon,
-      type: 'app',
-      route: '/patterns',
-      isDev: true,
-      _delete: true,
-    },
-    {
-      name: 'Workspace',
-      icon: WorkspacesOutlinedIcon,
-      iconActive: WorkspacesIcon,
-      type: 'app',
-      route: '/workspace',
-      hideDrawer: true,
-      hideOnMobile: true,
-      isDev: true,
-      _delete: true,
-    },
+    // {
+    //   name: 'Draw',
+    //   icon: FormatPaintOutlinedIcon,
+    //   iconActive: FormatPaintTwoToneIcon,
+    //   type: 'app',
+    //   route: '/draw',
+    //   hideDrawer: true,
+    //   // hideOnMobile: true,
+    //   // isDev: true,
+    //   _delete: true, // FIXME: not yet ready for prime time
+    // },
+    // {
+    //   name: 'Cortex',
+    //   icon: AutoAwesomeOutlinedIcon,
+    //   iconActive: AutoAwesomeIcon,
+    //   type: 'app',
+    //   route: '/cortex',
+    //   isDev: true,
+    //   _delete: true,
+    // },
+    // {
+    //   name: 'Patterns',
+    //   icon: AccountTreeOutlinedIcon,
+    //   iconActive: AccountTreeTwoToneIcon,
+    //   type: 'app',
+    //   route: '/patterns',
+    //   isDev: true,
+    //   _delete: true, // FIXME: not even begun
+    // },
+    // {
+    //   name: 'Workspace',
+    //   icon: WorkspacesOutlinedIcon,
+    //   iconActive: WorkspacesIcon,
+    //   type: 'app',
+    //   route: '/workspace',
+    //   hideDrawer: true,
+    //   hideOnMobile: true,
+    //   isDev: true,
+    //   _delete: true, // FIXME: the all-in-one, not even begun
+    // },
     // <-- divider here -->
     {
       name: SPECIAL_DIVIDER,
@@ -156,7 +150,7 @@ export const navItems: {
       icon: () => null,
     },
     {
-      name: 'Personas',
+      name: 'Create Personas',
       icon: Diversity2Icon, // was: Outlined.. but they look the same
       // iconActive: Diversity2Icon,
       type: 'app',
@@ -164,7 +158,16 @@ export const navItems: {
       hideBar: true,
     },
     {
-      name: 'Tokenize',
+      name: 'Compare Text',
+      barTitle: 'Comparison',
+      icon: DifferenceOutlinedIcon,
+      type: 'app',
+      route: '/diff',
+      hideDrawer: true,
+    },
+    {
+      name: 'Tokenize Text',
+      barTitle: 'Tokenization',
       icon: GrainIcon,
       type: 'app',
       route: '/tokens',
@@ -189,13 +192,15 @@ export const navItems: {
       _delete: true,
     },
     {
-      name: 'Shared Chat',
+      name: 'Shared Chats',
+      barTitle: 'Shared Chat',
       icon: IosShareOutlinedIcon,
       iconActive: IosShareIcon,
       type: 'app',
       route: '/link/chat/[chatLinkId]',
       landingRoute: '/link/chat/list',
       hideOnMobile: true,
+      panelAsMenu: true,
       hideIcon: hasNoChatLinkItems,
       hideNav: hasNoChatLinkItems,
     },
@@ -213,13 +218,13 @@ export const navItems: {
   // Modals
   modals: [
     {
-      name: 'Manage Models',
+      name: 'Configure AI Models',
       icon: BuildCircleIcon,
       type: 'modal',
       overlayId: 'models',
     },
     {
-      name: 'Preferences',
+      name: 'App Preferences',
       icon: SettingsIcon,
       type: 'modal',
       overlayId: 'settings',

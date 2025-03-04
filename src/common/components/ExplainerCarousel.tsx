@@ -1,5 +1,4 @@
 import React from 'react';
-import { sendGAEvent } from '@next/third-parties/google';
 
 import type { SxProps } from '@mui/joy/styles/types';
 import { Box, Button, Step, stepClasses, StepIndicator, stepIndicatorClasses, Stepper, Typography } from '@mui/joy';
@@ -8,14 +7,15 @@ import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 
-import { BlocksRenderer } from '~/modules/blocks/BlocksRenderer';
+import { ScaledTextBlockRenderer } from '~/modules/blocks/ScaledTextBlockRenderer';
 
-import { AgiSquircleIcon } from '~/common/components/icons/AgiSquircleIcon';
+import { BigAgiSquircleIcon } from '~/common/components/icons/big-agi/BigAgiSquircleIcon';
 import { ChatBeamIcon } from '~/common/components/icons/ChatBeamIcon';
-import { GlobalShortcutDefinition, ShortcutKeyName, useGlobalShortcuts } from '~/common/components/useGlobalShortcuts';
-import { hasGoogleAnalytics } from '~/common/components/GoogleAnalytics';
-import { useIsMobile } from '~/common/components/useMatchMedia';
+import { ShortcutKey, useGlobalShortcuts } from '~/common/components/shortcuts/useGlobalShortcuts';
 import { animationTextShadowLimey } from '~/common/util/animUtils';
+import { hasGoogleAnalytics, sendGAEvent } from '~/common/components/3rdparty/GoogleAnalytics';
+import { useIsMobile } from '~/common/components/useMatchMedia';
+import { useUIContentScaling } from '~/common/state/store-ui';
 
 
 // configuration
@@ -126,6 +126,7 @@ export function ExplainerCarousel(props: {
 
   // external state
   const isMobile = useIsMobile();
+  const contentScaling = useUIContentScaling();
 
   // derived state
   const { onFinished } = props;
@@ -159,11 +160,10 @@ export function ExplainerCarousel(props: {
   }, [props.explainerId]);
 
 
-  const shortcuts = React.useMemo((): GlobalShortcutDefinition[] => [
-    [ShortcutKeyName.Left, false, false, false, handlePrevPage],
-    [ShortcutKeyName.Right, false, false, false, handleNextPage],
-  ], [handleNextPage, handlePrevPage]);
-  useGlobalShortcuts(shortcuts);
+  useGlobalShortcuts('ExplainerCarousel', React.useMemo(() => [
+    { key: ShortcutKey.Left, action: handlePrevPage },
+    { key: ShortcutKey.Right, action: handleNextPage },
+  ], [handleNextPage, handlePrevPage]));
 
 
   // [effect] restart from 0 if steps change
@@ -198,7 +198,7 @@ export function ExplainerCarousel(props: {
           whiteSpace: 'balance',
         }}>
         {activeStep?.titlePrefix}{' '}
-        {!!activeStep?.titleSquircle && <AgiSquircleIcon inverted sx={{ color: 'white', fontSize: isMobile ? '1.55rem' : '2.04rem', borderRadius: 'md' }} />}
+        {!!activeStep?.titleSquircle && <BigAgiSquircleIcon inverted sx={{ color: 'white', fontSize: isMobile ? '1.55rem' : '2.04rem', borderRadius: 'md' }} />}
         {!!activeStep?.titleSquircle && '-'}
         {!!activeStep?.titleSpark && <Box component='span' sx={{
           fontWeight: 'lg',
@@ -230,12 +230,10 @@ export function ExplainerCarousel(props: {
               '--color-canvas-default': 'transparent!important',
             },
           }}>
-            <BlocksRenderer
+            <ScaledTextBlockRenderer
               text={mdText}
-              fromRole='assistant'
-              contentScaling='md'
-              fitScreen={isMobile}
-              renderTextAsMarkdown
+              contentScaling={contentScaling /* was: 'md' */}
+              textRenderVariant='markdown'
             />
           </Box>
         )}
