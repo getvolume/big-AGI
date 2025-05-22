@@ -44,6 +44,14 @@ interface UIPreferencesStore {
   showPersonaFinder: boolean;
   setShowPersonaFinder: (showPersonaFinder: boolean) => void;
 
+  composerQuickButton: 'off' | 'call' | 'beam';
+  setComposerQuickButton: (composerQuickButton: 'off' | 'call' | 'beam') => void;
+
+  // UI Dismissals
+
+  dismissals: Record<string, boolean>;
+  dismiss: (key: string) => void;
+
   // UI Counters
 
   actionCounters: Record<string, number>;
@@ -61,7 +69,7 @@ export const useUIPreferencesStore = create<UIPreferencesStore>()(
       preferredLanguage: BrowserLang.orUS,
       setPreferredLanguage: (preferredLanguage: string) => set({ preferredLanguage }),
 
-      centerMode: 'wide',
+      centerMode: 'full',
       setCenterMode: (centerMode: 'narrow' | 'wide' | 'full') => set({ centerMode }),
 
       complexityMode: 'pro',
@@ -92,6 +100,15 @@ export const useUIPreferencesStore = create<UIPreferencesStore>()(
       showPersonaFinder: false,
       setShowPersonaFinder: (showPersonaFinder: boolean) => set({ showPersonaFinder }),
 
+      composerQuickButton: 'beam',
+      setComposerQuickButton: (composerQuickButton: 'off' | 'call' | 'beam') => set({ composerQuickButton }),
+
+      // UI Dismissals
+
+      dismissals: {},
+      dismiss: (key: string) => set((state) => ({
+        dismissals: { ...state.dismissals, [key]: true },
+      })),
 
       // UI Counters
 
@@ -112,8 +129,9 @@ export const useUIPreferencesStore = create<UIPreferencesStore>()(
       /* versioning:
        * 1: rename 'enterToSend' to 'enterIsNewline' (flip the meaning)
        * 2: new Big-AGI 2 defaults
+       * 3: centerMode: 'full' is the new default
        */
-      version: 2,
+      version: 3,
 
       migrate: (state: any, fromVersion: number): UIPreferencesStore => {
 
@@ -125,6 +143,11 @@ export const useUIPreferencesStore = create<UIPreferencesStore>()(
         if (state && fromVersion < 2) {
           state.contentScaling = 'sm';
           state.doubleClickToEdit = false;
+        }
+
+        // 3: centerMode: 'full' is the new default
+        if (state && fromVersion < 3) {
+          state.centerMode = 'full';
         }
 
         return state;
@@ -147,6 +170,15 @@ export function useUIContentScaling(): ContentScaling {
 }
 
 
+export function useUIIsDismissed(key: string | null): boolean | undefined {
+  return useUIPreferencesStore((state) => !key ? undefined : Boolean(state.dismissals[key]));
+}
+
+export function uiSetDismissed(key: string): void {
+  useUIPreferencesStore.getState().dismiss(key);
+}
+
+
 // former:
 //  'export-share'                    // used the export function
 //  'share-chat-link'                 // not shared a Chat Link yet
@@ -157,6 +189,7 @@ type KnownKeys =
   | 'composer-shift-enter'            // not used Shift + Enter in the Composer yet
   | 'composer-alt-enter'              // not used Alt + Enter in the Composer yet
   | 'composer-ctrl-enter'             // not used Ctrl + Enter in the Composer yet
+  | 'models-setup-first-visit'        // first visit to the Models Setup
   ;
 
 export function useUICounter(key: KnownKeys, novelty: number = 1) {
@@ -172,4 +205,8 @@ export function useUICounter(key: KnownKeys, novelty: number = 1) {
     touch,
     forget,
   };
+}
+
+export function resetUICounter(key: KnownKeys) {
+  useUIPreferencesStore.getState().resetActionCounter(key);
 }
