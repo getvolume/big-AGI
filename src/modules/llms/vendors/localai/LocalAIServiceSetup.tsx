@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { z } from 'zod';
+import * as z from 'zod/v4';
 
 import { Button, Chip, Typography } from '@mui/joy';
 
@@ -22,7 +22,7 @@ import { LocalAIAdmin } from './LocalAIAdmin';
 import { ModelVendorLocalAI } from './localai.vendor';
 
 
-const localAIHostSchema = z.string().url().startsWith('http');
+const localAIHostSchema = z.url().startsWith('http');
 
 
 export function LocalAIServiceSetup(props: { serviceId: DModelsServiceId }) {
@@ -61,7 +61,7 @@ export function LocalAIServiceSetup(props: { serviceId: DModelsServiceId }) {
         </Typography>
 
         <ExpanderControlledBox expanded={checkboxExpanded}>
-          <Typography level='title-sm' sx={{ mt: 2 }}>LocalAI integration status:</Typography>
+          <Typography level='title-sm' sx={{ mt: 2 }}>Supported features:</Typography>
           <Typography level='body-xs' sx={{ whiteSpace: 'break-spaces', mt: 0.5, ml: '1px' }}>
             ✅{'  '}<Link href='https://localai.io/features/text-generation/' target='_blank'>Text generation</Link> with GPTs<br />
             ✅{'  '}<Link href='https://localai.io/features/openai-functions/' target='_blank'>Function calling</Link> by GPTs<br />
@@ -92,7 +92,7 @@ export function LocalAIServiceSetup(props: { serviceId: DModelsServiceId }) {
       autoCompleteId='localai-api-key' label='Optional API Key'
       placeholder='...'
       required={false}
-      rightLabel={backendHasKey ? '✔️ already set in server' : undefined}
+      rightLabel={backendHasKey ? 'Already set in server' : undefined}
       value={localAIKey} onChange={value => updateSettings({ localAIKey: value })}
     />
 

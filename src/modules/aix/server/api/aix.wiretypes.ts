@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod/v4';
 
 // Used to align Particles to the Typescript definitions from the frontend-side, on 'chat.fragments.ts'
 import type { DMessageToolResponsePart } from '~/common/stores/chat/chat.fragments';
@@ -18,6 +18,7 @@ import { openAIAccessSchema } from '~/modules/llms/server/openai/openai.router';
 
 // Export types
 export type AixParts_DocPart = z.infer<typeof AixWire_Parts.DocPart_schema>;
+export type AixParts_InlineAudioPart = z.infer<typeof AixWire_Parts.InlineAudioPart_schema>;
 export type AixParts_InlineImagePart = z.infer<typeof AixWire_Parts.InlineImagePart_schema>;
 export type AixParts_ModelAuxPart = z.infer<typeof AixWire_Parts.ModelAuxPart_schema>;
 export type AixParts_MetaCacheControl = z.infer<typeof AixWire_Parts.MetaCacheControl_schema>;
@@ -36,6 +37,8 @@ export type AixTools_ToolsPolicy = z.infer<typeof AixWire_Tooling.ToolsPolicy_sc
 export type AixAPI_Access = z.infer<typeof AixWire_API.Access_schema>;
 export type AixAPI_Context_ChatGenerate = z.infer<typeof AixWire_API.ContextChatGenerate_schema>;
 export type AixAPI_Model = z.infer<typeof AixWire_API.Model_schema>;
+export type AixAPI_ResumeHandle = z.infer<typeof AixWire_API.ResumeHandle_schema>;
+export type AixAPI_ConnectionOptions_ChatGenerate = z.infer<typeof AixWire_API.ConnectionOptionsChatGenerate_schema>;
 export type AixAPIChatGenerate_Request = z.infer<typeof AixWire_API_ChatContentGenerate.Request_schema>;
 
 
@@ -69,7 +72,7 @@ export namespace OpenAPI_Schema {
     format: z.string().optional(),
 
     // [object] properties (recursively)
-    properties: z.record(z.any() /* could refer to self using z.lazy().... */).optional(),
+    properties: z.record(z.string(), z.any() /* could refer to self using z.lazy().... */).optional(),
     // [object] required properties
     required: z.array(z.string()).optional(),
 
@@ -97,7 +100,22 @@ export namespace AixWire_Parts {
     text: z.string(),
   });
 
-  // NOTE: different from DMessageImageRefPart, in that the image data is inlined rather than bein referred to
+  export const InlineAudioPart_schema = z.object({
+    pt: z.literal('inline_audio'),
+    /**
+     * Minimal audio format support for browser compatibility:
+     * - audio/wav: Most compatible, converted from Gemini PCM
+     * - audio/mp3: Widely supported, efficient
+     * - audio/ogg: Open format, good compression
+     */
+    mimeType: z.enum(['audio/wav', 'audio/mp3']), // was (['audio/wav', 'audio/mp3', 'audio/aiff', 'audio/aac', 'audio/ogg', 'audio/flac'])
+    base64: z.string(),
+    // sampleRate: z.number().optional(), // for PCM formats
+    // channels: z.number().optional(),   // for PCM formats
+    // durationMs: z.number().optional(),
+  });
+
+  // NOTE: different from DMessageImageRefPart, in that the image data is inlined rather than being referred to
   export const InlineImagePart_schema = z.object({
     pt: z.literal('inline_image'),
     /**
@@ -109,13 +127,6 @@ export namespace AixWire_Parts {
     mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
     base64: z.string(),
   });
-
-  // Disabling inline audio for now, as it's only supported by Gemini
-  // const InlineAudioPart_schema = z.object({
-  //   pt: z.literal('inline_audio'),
-  //   mimeType: z.enum(['audio/wav', 'audio/mp3', 'audio/aiff', 'audio/aac', 'audio/ogg', 'audio/flac']),
-  //   base64: z.string(),
-  // });
 
   // The reason of existence of a doc part, is to be encoded differently depending on
   // the target llm (e.g. xml for anthropic, markdown titled block for others, ...)
@@ -236,6 +247,7 @@ export namespace AixWire_Content {
     parts: z.array(z.discriminatedUnion('pt', [
       AixWire_Parts.TextPart_schema,
       AixWire_Parts.DocPart_schema, // Jan 10, 2025: added support for Docs in AIX system
+      AixWire_Parts.InlineImagePart_schema, // Sept 12, 2025: added support for Inline Images in AIX system
       AixWire_Parts.MetaCacheControl_schema,
     ])),
   });
@@ -246,6 +258,7 @@ export namespace AixWire_Content {
     role: z.literal('user'),
     parts: z.array(z.discriminatedUnion('pt', [
       AixWire_Parts.TextPart_schema,
+      // AixWire_Parts.InlineAudioPart_schema,
       AixWire_Parts.InlineImagePart_schema,
       AixWire_Parts.DocPart_schema,
       AixWire_Parts.MetaCacheControl_schema,
@@ -257,6 +270,7 @@ export namespace AixWire_Content {
     role: z.literal('model'),
     parts: z.array(z.discriminatedUnion('pt', [
       AixWire_Parts.TextPart_schema,
+      AixWire_Parts.InlineAudioPart_schema,
       AixWire_Parts.InlineImagePart_schema,
       AixWire_Parts.ToolInvocationPart_schema,
       AixWire_Parts.ModelAuxPart_schema,
@@ -304,7 +318,7 @@ export namespace AixWire_Tooling {
      */
     input_schema: z.object({
       // type: z.literal('object'), // Note: every protocol adapter adds this in the structure, here's we're just opting to not add it
-      properties: z.record(OpenAPI_Schema.Object_schema),
+      properties: z.record(z.string(), OpenAPI_Schema.Object_schema),
       required: z.array(z.string()).optional(),
     }).optional(),
   });
@@ -340,7 +354,7 @@ export namespace AixWire_Tooling {
    *       of DMessageToolCallPart messages.
    *
    * __Code Execution Tools__
-   * Models of the Gemini family will emit a code exeuction Tool Call, then execute
+   * Models of the Gemini family will emit a code execution Tool Call, then execute
    * the code into a sandboxed code interpreter, then emit a Tool Response with the
    * generated code and then resume execution of the code, inline.
    *
@@ -360,8 +374,8 @@ export namespace AixWire_Tooling {
   /**
    * Policy for tools that the model can use:
    * - auto: can use a tool or not (default, same as not specifying a policy)
-   * - any: must use one tool at least
-   * - function_call: must use a specific Function Tool
+   * - any: MUST use one tool at least
+   * - function_call: MUST use a specific Function Tool
    * - none: same as not giving the model any tool [REMOVED - just give no tools]
    */
   export const ToolsPolicy_schema = z.discriminatedUnion('type', [
@@ -387,17 +401,33 @@ export namespace AixWire_API {
 
   export const Model_schema = z.object({
     id: z.string(),
+    acceptsOutputs: z.array(z.enum(['text', 'image', 'audio'])),
     temperature: z.number().min(0).max(2).optional()
       .nullable(), // [Deepseek, 2025-01-20] temperature unsupported, so we use 'null' to omit it from the request
     maxTokens: z.number().min(1).optional(),
     topP: z.number().min(0).max(1).optional(),
     forceNoStream: z.boolean().optional(),
+    vndAnt1MContext: z.boolean().optional(),
+    vndAntSkills: z.string().optional(),
     vndAntThinkingBudget: z.number().nullable().optional(),
+    vndAntWebFetch: z.enum(['auto']).optional(),
+    vndAntWebSearch: z.enum(['auto']).optional(),
+    vndGeminiAspectRatio: z.enum(['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '21:9']).optional(),
+    vndGeminiGoogleSearch: z.enum(['unfiltered', '1d', '1w', '1m', '6m', '1y']).optional(),
     vndGeminiShowThoughts: z.boolean().optional(),
     vndGeminiThinkingBudget: z.number().optional(),
-    vndOaiReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+    vndOaiResponsesAPI: z.boolean().optional(),
+    vndOaiReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     vndOaiRestoreMarkdown: z.boolean().optional(),
+    vndOaiVerbosity: z.enum(['low', 'medium', 'high']).optional(),
     vndOaiWebSearchContext: z.enum(['low', 'medium', 'high']).optional(),
+    vndOaiImageGeneration: z.enum(['mq', 'hq', 'hq_edit', 'hq_png']).optional(),
+    vndOrtWebSearch: z.enum(['auto']).optional(),
+    vndPerplexityDateFilter: z.enum(['unfiltered', '1m', '3m', '6m', '1y']).optional(),
+    vndPerplexitySearchMode: z.enum(['default', 'academic']).optional(),
+    vndXaiSearchMode: z.enum(['auto', 'on', 'off']).optional(),
+    vndXaiSearchSources: z.string().optional(),
+    vndXaiSearchDateFilter: z.enum(['unfiltered', '1d', '1w', '1m', '6m', '1y']).optional(),
     /**
      * [OpenAI, 2025-03-11] This is the generic version of the `web_search_options.user_location` field
      * This AIX field mimics on purpose: https://platform.openai.com/docs/api-reference/chat/create
@@ -408,6 +438,17 @@ export namespace AixWire_API {
       region: z.string().optional(),    // free text input for the reg. of the user the user, e.g. California
       timezone: z.string().optional(),  // IANA timezone of the user, e.g. America/Los_Angeles
     }).optional(),
+  });
+
+  /// Resume Handle
+
+  /**
+   * TEMP - Not well defined yet - OpenAI Responses-only implementation
+   * [OpenAI Responses API] Allows reconnecting to an in-progress response by its ID.
+   */
+  export const ResumeHandle_schema = z.object({
+    responseId: z.string(),
+    startingAfter: z.number().optional(), // the sequence number of event after which to start streaming
   });
 
   /// Context
@@ -449,12 +490,28 @@ export namespace AixWire_API {
 
   /// Connection options
 
-  export const ConnectionOptions_schema = z.object({
+  export const ConnectionOptionsChatGenerate_schema = z.object({
+
+    /**
+     * Request an echo of the upstream AIX dispatch request. Fulfillment is decided by the server, and 'production' builds will NOT include 'headers', just the 'body'.
+     */
     debugDispatchRequest: z.boolean().optional(),
+
+    /**
+     * Request profiling data for a streaming call: time spent preparing, connecting, waiting, receiving, etc. Fulfillment is decided by the server, and won't be available on 'production' builds.
+     */
     debugProfilePerformance: z.boolean().optional(),
-    throttlePartTransmitter: z.number().optional(), // in ms
-    // retry: z.number().optional(),
-    // retryDelay: z.number().optional(),
+
+    /**
+     * Request a resumable connection, if the model/service supports it.
+     * - enables response storage for resumability (first found in the OpenAI Responses API)
+     */
+    enableResumability: z.boolean().optional(),
+
+    // Old ideas:
+    // throttleParticleTransmitter: z.number().optional(), // in ms
+    // retry: z.number().optional(), // retry upstream
+
   });
 
 }
@@ -516,12 +573,13 @@ export namespace AixWire_Particles {
     | { cg: 'issue', issueId: CGIssueId, issueText: string }
     | { cg: 'set-metrics', metrics: CGSelectMetrics }
     | { cg: 'set-model', name: string }
-    | { cg: '_debugDispatchRequest', security: 'dev-env', dispatchRequest: { url: string, headers: string, body: string } } // may generalize this in the future
+    | { cg: 'set-upstream-handle', handle: { uht: 'vnd.oai.responses', responseId: string, expiresAt: number | null } }
+    | { cg: '_debugDispatchRequest', security: 'dev-env', dispatchRequest: { url: string, headers: string, body: string, bodySize: number } } // may generalize this in the future
     | { cg: '_debugProfiler', measurements: Record<string, number | string>[] };
 
   export type CGEndReason =     // the reason for the end of the chat generation
     | 'abort-client'            // user aborted before the end of stream
-    | 'done-dialect'            // OpenAI signals the '[DONE]' event, or Anthropic sensds the 'message_stop' event
+    | 'done-dialect'            // OpenAI signals the '[DONE]' event, or Anthropic sends the 'message_stop' event
     | 'done-dispatch-aborted'   // this shall never see the light of day, as it was a reaction to the intake being aborted first
     | 'done-dispatch-closed'    // dispatch connection closed
     | 'issue-dialect'           // [1] ended because a dispatch encountered an issue, such as out-of-tokens, recitation, etc.
@@ -538,15 +596,17 @@ export namespace AixWire_Particles {
   export type GCTokenStopReason =
     | 'ok'                      // clean, including reaching 'stop sequences'
     | 'ok-tool_invocations'     // clean & tool invocations
+    | 'ok-pause_continue'       // clean, but paused (e.g. Anthropic server tools like web search) - requires continuation
     // premature:
-    | 'cg-issue'                // [1][2] chat-generation issue (see CGIssueId)
+    | 'cg-issue'                // [1][2] chat-generation issue (see CGIssueId, mostly a dispatch or dialect issue)
     | 'client-abort-signal'     // the client aborted - likely a user/auto initiation
     | 'filter-content'          // content filter (e.g. profanity)
     | 'filter-recitation'       // recitation filter (e.g. recitation)
+    | 'filter-refusal'          // safety refusal filter (e.g. Anthropic safety concerns)
     | 'out-of-tokens';          // got out of tokens
 
   /**
-   * NOTE: break compatbility with this D-stored-type only when we'll
+   * NOTE: break compatibility with this D-stored-type only when we'll
    * start to need backwards-incompatible Particle->Reassembler flexibility,
    * which can't be just extended in the D-stored-type.
    *
@@ -568,6 +628,9 @@ export namespace AixWire_Particles {
 
     // v = Tokens/s
     vTOutInner?: number,  // TOut / dtInner
+
+    // $c = Cents of USD
+    $cReported?: number,  // Total cost in cents as reported by provider (e.g. Perplexity usage.cost.total_cost)
   };
 
   // TextParticle / PartParticle - keep in line with the DMessage*Part counterparts
@@ -588,7 +651,9 @@ export namespace AixWire_Particles {
     | { p: '_fci', _args: string }
     | { p: 'cei', id: string, language: string, code: string, author: 'gemini_auto_inline' }
     | { p: 'cer', id: string, error: DMessageToolResponsePart['error'], result: string, executor: 'gemini_auto_inline', environment: DMessageToolResponsePart['environment'] }
+    | { p: 'ia', mimeType: string, a_b64: string, label?: string, generator?: string, durationMs?: number } // inline audio, complete
     | { p: 'ii', mimeType: string, i_b64: string, label?: string, generator?: string, prompt?: string } // inline image, complete
-    | { p: 'urlc', title: string, url: string, num?: number, from?: number, to?: number, text?: string }; // url citation
+    | { p: 'urlc', title: string, url: string, num?: number, from?: number, to?: number, text?: string, pubTs?: number } // url citation - pubTs: publication timestamp
+    | { p: 'vp', text: string, mot: 'search-web' | 'gen-image' | 'code-exec' }; // void placeholder - temporary status text that gets wiped when real content arrives
 
 }

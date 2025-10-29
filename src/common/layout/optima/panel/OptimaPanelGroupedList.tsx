@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import type { SxProps } from '@mui/joy/styles/types';
 import { Box, Checkbox, MenuList } from '@mui/joy';
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 
 import { ExpanderControlledBox } from '~/common/components/ExpanderControlledBox';
-import { themeScalingMap } from '~/common/app.theme';
-import { useUIContentScaling } from '~/common/stores/store-ui';
-
-import { OPTIMA_PANEL_GROUPS_SPACING } from '../optima.config';
+import { adjustContentScaling, themeScalingMap, } from '~/common/app.theme';
+import { useIsMobile } from '~/common/components/useMatchMedia';
+import { useUIContentScaling, useUIPanelGroupCollapsed, uiSetPanelGroupCollapsed } from '~/common/stores/store-ui';
 
 
 const gutterSx: SxProps = {
@@ -34,7 +34,8 @@ const headerSx: SxProps = {
   backgroundColor: 'background.level1',
   borderBottom: '1px solid',
   borderTop: '1px solid',
-  borderColor: 'rgba(var(--joy-palette-neutral-mainChannel) / 0.1)',
+  borderTopColor: 'var(--joy-palette-neutral-outlinedDisabledBorder)',
+  borderBottomColor: 'rgba(var(--joy-palette-neutral-mainChannel) / 0.05)',
 
   // mimics ListItem
   px: 'var(--ListItem-paddingX, 0.75rem)',
@@ -61,11 +62,18 @@ const headerSx: SxProps = {
       backgroundColor: 'background.level2',
     },
   },
+
+  // if expanded, soften the bottom border
+  '&[aria-expanded="false"]': {
+    backgroundColor: 'background.surface',
+    borderColor: 'transparent',
+  },
 };
 
 const headerTitleSx: SxProps = {
+  flexGrow: 1,
   color: 'text.tertiary',
-  fontSize: 'sm',
+  // fontSize: 'xs',
   fontWeight: 'lg',
 };
 
@@ -77,51 +85,88 @@ const groupListSx: SxProps = {
   borderRadius: 0,
   background: 'transparent',
   flexGrow: 0,
-  mb: OPTIMA_PANEL_GROUPS_SPACING,
+
+  // NOTE 2: removed the margin-bottom, so the spacing is used as gap only
+  // NOTE: switched to smaller margin on mobile, keeping it larger on desktop
+  // mb: { xs: 1, md: OPTIMA_PANEL_GROUPS_SPACING } as const,
+  // mb: OPTIMA_PANEL_GROUPS_SPACING,
+
   // fontSize: '0.9375rem', // 15px (14 too small, 16 too big?)
   // py: 0,
   // py: 'var(--ListDivider-gap)',
-};
+} as const;
 
 
 export function OptimaPanelGroupedList(props: {
-  title?: string;
-  endDecorator?: React.ReactNode;
+  title?: React.ReactNode;
+  startDecorator?: React.ReactNode;
   children?: React.ReactNode;
+  marginTopAuto?: boolean;
+  hideExpandedCheckbox?: boolean;
+
+  // external control
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
+
+  // simplified persistent collapsible (as an alternative to the external control)
   persistentCollapsibleId?: string;
-  startExpanded?: boolean;
+  persistentStartCollapsed?: boolean;
 }) {
 
   // state
-  // TODO: persist by id
-  const [_expanded, setExpanded] = React.useState(props.startExpanded === true);
+  const [internalExpanded, setInternalExpanded] = React.useState(props.persistentStartCollapsed !== true);
 
   // external state
-  const contentScaling = useUIContentScaling();
+  const isMobile = useIsMobile();
+  const contentScaling = adjustContentScaling(useUIContentScaling(), isMobile ? 1 : 0);
+  const smallerContentScaling = adjustContentScaling(contentScaling, -1);
+  
+  // persistent collapse state
+  const persistentCollapsed = useUIPanelGroupCollapsed(props.persistentCollapsibleId || null);
 
   // derived state
-  const isCollapsible = !!props.persistentCollapsibleId;
-  const isExpanded = !isCollapsible || _expanded;
+  const { onToggleExpanded } = props;
+  const isControlled = props.expanded !== undefined;
+  const isCollapsible = isControlled || !!props.persistentCollapsibleId;
+
+  // use appropriate expanded state based on mode
+  const isExpanded =
+    isControlled ? props.expanded as boolean // external control
+      : !props.persistentCollapsibleId ? internalExpanded // internal control
+        : persistentCollapsed !== undefined ? !persistentCollapsed // persistent collapsible
+          : !props.persistentStartCollapsed; // initial state if none of the above
 
   // handlers
-
-  const toggleExpanded = React.useCallback(() => {
-    setExpanded(expanded => !expanded);
-  }, []);
-
+  const handleToggle = React.useCallback(() => {
+    if (isControlled)
+      onToggleExpanded?.();
+    else if (props.persistentCollapsibleId)
+      uiSetPanelGroupCollapsed(props.persistentCollapsibleId, isExpanded);
+    else
+      setInternalExpanded(prev => !prev);
+  }, [isControlled, onToggleExpanded, props.persistentCollapsibleId, isExpanded]);
 
   return (
-    <Box>
+    <Box sx={props.marginTopAuto ? { marginTop: 'auto' } : undefined}>
 
       {/* Header */}
       {(!!props.title || isCollapsible) && (
         <Box
-          onClick={isCollapsible ? toggleExpanded : undefined}
+          aria-expanded={isExpanded}
+          onClick={isCollapsible ? handleToggle : undefined}
           role={isCollapsible ? 'button' : undefined}
           sx={headerSx}
         >
-          <Box sx={headerTitleSx}>{props.title}</Box>
-          {isCollapsible && <Checkbox size='md' variant='outlined' color='neutral' checked={isExpanded} />}
+          {props.startDecorator}
+          <Box fontSize={smallerContentScaling} sx={headerTitleSx}>{props.title}</Box>
+          {isCollapsible && props.hideExpandedCheckbox && !isExpanded && <UnfoldMoreIcon sx={{ mr: 0, color: 'neutral.softColor', fontSize: 'md' }} />}
+          {isCollapsible && !props.hideExpandedCheckbox && (
+            <Checkbox
+              size='md' variant='outlined' color='neutral'
+              checked={isExpanded}
+              readOnly
+            />
+          )}
         </Box>
       )}
 

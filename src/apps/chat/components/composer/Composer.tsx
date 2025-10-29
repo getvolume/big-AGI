@@ -17,14 +17,14 @@ import { useChatAutoSuggestAttachmentPrompts, useChatMicTimeoutMsValue } from '.
 import { useAgiAttachmentPrompts } from '~/modules/aifn/agiattachmentprompts/useAgiAttachmentPrompts';
 import { useBrowseCapability } from '~/modules/browse/store-module-browsing';
 
-import { DLLM, LLM_IF_OAI_Vision } from '~/common/stores/llms/llms.types';
+import { DLLM, getLLMContextTokens, LLM_IF_OAI_Vision } from '~/common/stores/llms/llms.types';
 import { AudioGenerator } from '~/common/util/audio/AudioGenerator';
 import { AudioPlayer } from '~/common/util/audio/AudioPlayer';
 import { ButtonAttachFilesMemo, openFileForAttaching } from '~/common/components/ButtonAttachFiles';
 import { ChatBeamIcon } from '~/common/components/icons/ChatBeamIcon';
 import { ConfirmationModal } from '~/common/components/modals/ConfirmationModal';
 import { ConversationsManager } from '~/common/chat-overlay/ConversationsManager';
-import { DMessageMetadata, DMetaReferenceItem, messageFragmentsReduceText } from '~/common/stores/chat/chat.message';
+import { DMessageId, DMessageMetadata, DMetaReferenceItem, messageFragmentsReduceText } from '~/common/stores/chat/chat.message';
 import { ShortcutKey, ShortcutObject, useGlobalShortcuts } from '~/common/components/shortcuts/useGlobalShortcuts';
 import { addSnackbar } from '~/common/components/snackbar/useSnackbarsStore';
 import { animationEnterBelow } from '~/common/util/animUtils';
@@ -87,7 +87,6 @@ const zIndexComposerOverlayMic = 10;
 const SHOW_TIPS_AFTER_RELOADS = 25;
 
 
-
 const paddingBoxSx: SxProps = {
   p: { xs: 1, md: 2 },
 };
@@ -112,9 +111,11 @@ export function Composer(props: {
   isMulticast: boolean | null;
   isDeveloperMode: boolean;
   onAction: (conversationId: DConversationId, chatExecuteMode: ChatExecuteMode, fragments: (DMessageContentFragment | DMessageAttachmentFragment)[], metadata?: DMessageMetadata) => boolean;
+  onConversationBeamEdit: (conversationId: DConversationId, editMessageId?: DMessageId) => Promise<void>;
   onConversationsImportFromFiles: (files: File[]) => Promise<void>;
   onTextImagine: (conversationId: DConversationId, text: string) => void;
   setIsMulticast: (on: boolean) => void;
+  onComposerHasContent: (hasContent: boolean) => void;
   sx?: SxProps;
 }) {
 
@@ -177,7 +178,7 @@ export function Composer(props: {
   const enableLoadURLsInComposer = hasComposerBrowseCapability && !composeText.startsWith('/');
 
   // user message for attachments
-  const { onConversationsImportFromFiles } = props;
+  const { onConversationBeamEdit, onConversationsImportFromFiles } = props;
   const handleFilterAGIFile = React.useCallback(async (file: File): Promise<boolean> =>
     await showPromisedOverlay('composer-open-or-attach', { rejectWithValue: false }, ({ onResolve, onUserReject }) => (
       <ConfirmationModal
@@ -231,7 +232,7 @@ export function Composer(props: {
     tokensComposer += glueForMessageTokens(props.chatLLM);
   const tokensHistory = _historyTokenCount;
   const tokensResponseMax = getModelParameterValueOrThrow('llmResponseTokens', props.chatLLM?.initialParameters, props.chatLLM?.userParameters, 0) ?? 0;
-  const tokenLimit = props.chatLLM?.contextTokens || 0;
+  const tokenLimit = getLLMContextTokens(props.chatLLM) ?? 0;
   const tokenChatPricing = props.chatLLM?.pricing?.chat;
 
 
@@ -242,6 +243,13 @@ export function Composer(props: {
       setComposeText(startupText);
     }
   }, [setComposeText, setStartupText, startupText]);
+
+  // Effect: notify the parent of presence/absence of content
+  const isContentful = composeText.length > 0 || !!attachmentDrafts.length;
+  const { onComposerHasContent } = props;
+  React.useEffect(() => {
+    onComposerHasContent?.(isContentful);
+  }, [isContentful, onComposerHasContent]);
 
 
   // Overlay actions
@@ -450,8 +458,13 @@ export function Composer(props: {
       addSnackbar({ key: 'chat-mic-running', message: 'Please wait for the microphone to finish.', type: 'info' });
       return;
     }
-    await handleSendAction('beam-content', composeText); // 'beam' button
-  }, [composeText, handleSendAction, micIsRunning]);
+    if (composeText) {
+      await handleSendAction('beam-content', composeText); // 'beam' button
+    } else {
+      if (targetConversationId)
+        void onConversationBeamEdit(targetConversationId); // beam-edit conversation
+    }
+  }, [composeText, handleSendAction, micIsRunning, onConversationBeamEdit, targetConversationId]);
 
   const handleStopClicked = React.useCallback(() => {
     targetConversationId && abortConversationTemp(targetConversationId);
@@ -717,11 +730,11 @@ export function Composer(props: {
 
   if (isDesktop && timeToShowTips && !isDraw) {
     if (explainShiftEnter)
-      textPlaceholder += !enterIsNewline ? '\n\n💡 Shift + Enter to add a new line' : '\n\n💡 Shift + Enter to send';
-    else if (explainAltEnter)
-      textPlaceholder += platformAwareKeystrokes('\n\n💡 Tip: Alt + Enter to just append the message');
+      textPlaceholder += !enterIsNewline ? '\n\n⏎ Shift + Enter to add a new line' : '\n\n➤ Shift + Enter to send';
+      // else if (explainAltEnter)
+    //   textPlaceholder += platformAwareKeystrokes('\n\n⭳ Tip: Alt + Enter to just append the message');
     else if (explainCtrlEnter)
-      textPlaceholder += platformAwareKeystrokes('\n\n💡 Tip: Ctrl + Enter to beam');
+      textPlaceholder += platformAwareKeystrokes('\n\n⫷ Tip: Ctrl + Enter to beam');
   }
 
   const stableGridSx: SxProps = React.useMemo(() => ({
@@ -847,7 +860,7 @@ export function Composer(props: {
                     variant='outlined'
                     color={isDraw ? 'warning' : isReAct ? 'success' : undefined}
                     autoFocus
-                    minRows={isMobile ? 4 : isDraw ? 4 : agiAttachmentPrompts.hasData ? 3 : showChatInReferenceTo ? 4 : 5}
+                    minRows={isMobile ? 3.5 : isDraw ? 4 : agiAttachmentPrompts.hasData ? 3 : showChatInReferenceTo ? 4 : 5}
                     maxRows={isMobile ? 8 : 10}
                     placeholder={textPlaceholder}
                     value={composeText}

@@ -7,8 +7,8 @@ import SettingsIcon from '@mui/icons-material/Settings';
 
 import { findModelVendor } from '~/modules/llms/vendors/vendors.registry';
 
-import type { DLLM, DLLMId } from '~/common/stores/llms/llms.types';
 import type { DModelsServiceId } from '~/common/stores/llms/llms.service.types';
+import { DLLM, DLLMId, isLLMVisible } from '~/common/stores/llms/llms.types';
 import { DebouncedInputMemo } from '~/common/components/DebouncedInput';
 import { GoodTooltip } from '~/common/components/GoodTooltip';
 import { KeyStroke } from '~/common/components/KeyStroke';
@@ -39,7 +39,7 @@ function LLMDropdown(props: {
   // derived state
   const { chatLlmId, llms, setChatLlmId } = props;
 
-  const llmsCount = llms.filter(llm => !llm.hidden).length;
+  const llmsCount = llms.filter(isLLMVisible).length;
   const showFilter = llmsCount >= 50;
 
   const handleChatLLMChange = React.useCallback((value: DLLMId | null) => {
@@ -51,7 +51,7 @@ function LLMDropdown(props: {
   }, [chatLlmId]);
 
 
-  // dropdown items - chached
+  // dropdown items - cached
   const stabilizeLlmOptions = React.useRef<OptimaDropdownItems>(undefined);
 
   const llmDropdownItems: OptimaDropdownItems = React.useMemo(() => {
@@ -69,7 +69,7 @@ function LLMDropdown(props: {
         return false;
 
       // filter-out hidden models from the dropdown
-      return lcFilterString ? true : !llm.hidden;
+      return lcFilterString ? true : isLLMVisible(llm);
     });
 
     for (const llm of filteredLLMs) {
@@ -162,6 +162,9 @@ function LLMDropdown(props: {
   // }, [chatLlmId]);
 
 
+  // Zero State - no models available
+  const hasDropdownOptions = Object.keys(llmDropdownItems || {}).length > 0;
+
   // "Models Setup" button
   const llmDropdownAppendOptions = React.useMemo(() => <>
 
@@ -176,9 +179,9 @@ function LLMDropdown(props: {
     {/*)}*/}
 
     <ListItemButton key='menu-llms' onClick={optimaOpenModels} sx={{ backgroundColor: 'background.surface', py: 'calc(2 * var(--ListDivider-gap))' }}>
-      <ListItemDecorator><BuildCircleIcon color='success' /></ListItemDecorator>
+      <ListItemDecorator>{!hasDropdownOptions ? '⚠️' : <BuildCircleIcon color='success' />}</ListItemDecorator>
       <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'center' }}>
-        Models
+        {!hasDropdownOptions ? 'Add Models' : 'Models'}
         {/*<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>*/}
         {/*  <KeyStroke variant='outlined' size='sm' combo='Ctrl + Shift + M' sx={{ ml: 2, bgcolor: 'background.popup' }} />*/}
         <ArrowForwardRoundedIcon sx={{ ml: 'auto', fontSize: 'xl' }} />
@@ -186,7 +189,7 @@ function LLMDropdown(props: {
       </Box>
     </ListItemButton>
 
-  </>, []);
+  </>, [hasDropdownOptions]);
 
 
   return (
@@ -195,7 +198,7 @@ function LLMDropdown(props: {
       items={llmDropdownItems}
       value={chatLlmId}
       onChange={handleChatLLMChange}
-      placeholder={props.placeholder || 'Models …'}
+      placeholder={props.placeholder || '⚠️ Models …'}
       prependOption={llmDropdownPrependOptions}
       appendOption={llmDropdownAppendOptions}
       activeEndDecorator={llmDropdownButton}
